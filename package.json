@@ -1,0 +1,15 @@
+{
+  "name": "todo-api",
+  "version": "1.0.0",
+  "description": "API de gestion de taches, projet fil rouge DevOps / Docker / GitLab CI",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.11.5"
+  }
+}
