@@ -7,8 +7,8 @@ process.env.DB_NAME = process.env.DB_NAME || 'todo_db';
 process.env.DB_USER = process.env.DB_USER || 'todo_user';
 process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'todo_pass';
 
-const app = require('../src/app');
-const { ensureSchema, pool } = require('../src/db/pool');
+const app = require('../../src/app');
+const { ensureSchema, pool } = require('../../src/db/pool');
 
 let server;
 let baseUrl;

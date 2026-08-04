@@ -1,5 +1,5 @@
 const express = require('express');
-const { pool } = require('../db/pool');
+const Task = require('../models/task');
 
 const router = express.Router();
 
@@ -33,12 +33,8 @@ router.post('/', async (req, res, next) => {
     const statusError = validateStatus(status);
     if (statusError) return res.status(400).json({ error: statusError });
 
-    const result = await pool.query(
-      `INSERT INTO tasks (description, status) VALUES ($1, $2) RETURNING *`,
-      [description, status || 'todo']
-    );
-
-    res.status(201).json(result.rows[0]);
+    const task = await Task.create(description, status);
+    res.status(201).json(task);
   } catch (err) {
     next(err);
   }
@@ -46,8 +42,8 @@ router.post('/', async (req, res, next) => {
 
 router.get('/', async (req, res, next) => {
   try {
-    const result = await pool.query(`SELECT * FROM tasks ORDER BY id ASC`);
-    res.json(result.rows);
+    const tasks = await Task.findAll();
+    res.json(tasks);
   } catch (err) {
     next(err);
   }
@@ -60,12 +56,12 @@ router.get('/:id', async (req, res, next) => {
       return res.status(400).json({ error: 'id doit etre un entier' });
     }
 
-    const result = await pool.query(`SELECT * FROM tasks WHERE id = $1`, [id]);
-    if (result.rows.length === 0) {
+    const task = await Task.findById(id);
+    if (!task) {
       return res.status(404).json({ error: 'tache introuvable' });
     }
 
-    res.json(result.rows[0]);
+    res.json(task);
   } catch (err) {
     next(err);
   }
@@ -88,22 +84,17 @@ router.put('/:id', async (req, res, next) => {
     const statusError = validateStatus(status);
     if (statusError) return res.status(400).json({ error: statusError });
 
-    const existing = await pool.query(`SELECT * FROM tasks WHERE id = $1`, [id]);
-    if (existing.rows.length === 0) {
+    const existing = await Task.findById(id);
+    if (!existing) {
       return res.status(404).json({ error: 'tache introuvable' });
     }
 
-    const updated = {
-      description: description !== undefined ? description : existing.rows[0].description,
-      status: status !== undefined ? status : existing.rows[0].status,
-    };
+    const task = await Task.update(id, {
+      description: description !== undefined ? description : existing.description,
+      status: status !== undefined ? status : existing.status,
+    });
 
-    const result = await pool.query(
-      `UPDATE tasks SET description = $1, status = $2, updated_at = now() WHERE id = $3 RETURNING *`,
-      [updated.description, updated.status, id]
-    );
-
-    res.json(result.rows[0]);
+    res.json(task);
   } catch (err) {
     next(err);
   }
@@ -116,8 +107,8 @@ router.delete('/:id', async (req, res, next) => {
       return res.status(400).json({ error: 'id doit etre un entier' });
     }
 
-    const result = await pool.query(`DELETE FROM tasks WHERE id = $1 RETURNING *`, [id]);
-    if (result.rows.length === 0) {
+    const task = await Task.remove(id);
+    if (!task) {
       return res.status(404).json({ error: 'tache introuvable' });
     }
 
