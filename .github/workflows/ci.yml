@@ -55,9 +55,28 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/todo-api:${{ github.sha }}
 
-  runner-check:
-    needs: [test]
-    runs-on: self-hosted # ce job tourne chez vous, jamais sur une branche de travail
+  deploy:
+    needs: [build]
+    runs-on: self-hosted # ce job tourne chez vous, a cote de la machine cible
     if: github.ref == 'refs/heads/main'
     steps:
-      - run: hostname && docker ps
+      - uses: actions/checkout@v4
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Envoyer compose.yml sur la machine cible
+        run: |
+          ssh -o StrictHostKeyChecking=no -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "mkdir -p /srv/todo"
+          scp -o StrictHostKeyChecking=no -P ${{ secrets.DEPLOY_PORT }} docker-compose.prod.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/todo/compose.yml
+
+      - name: Deployer la version courante
+        run: |
+          ssh -o StrictHostKeyChecking=no -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "cd /srv/todo && REGISTRY_USER=${{ secrets.DOCKERHUB_USERNAME }} TAG=${{ github.sha }} docker compose up -d todo-api todo-db"
+
+      - name: Verifier /health
+        run: |
+          ssh -o StrictHostKeyChecking=no -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "curl -sf http://localhost:3000/health"
