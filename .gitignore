@@ -2,3 +2,6 @@ node_modules/
 .env
 *.log
 .DS_Store
+
+# Phase 2 : cle privee SSH de la machine cible, ne doit jamais etre commitee
+deploy_key
