@@ -55,7 +55,7 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/todo-api:${{ github.sha }}
 
   runner-check:
-    needs: [build]
+    needs: [test]
     runs-on: self-hosted # ce job tourne chez vous, jamais sur une branche de travail
     if: github.ref == 'refs/heads/main'
     steps:
