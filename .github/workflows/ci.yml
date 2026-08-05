@@ -1,5 +1,6 @@
 name: CI
 # Pipeline: test sur toutes les branches, build+push sur main uniquement
+# verif: secret Docker Hub retire
 
 on:
   push:
