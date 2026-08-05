@@ -5,3 +5,6 @@ node_modules/
 
 # Phase 2 : cle privee SSH de la machine cible, ne doit jamais etre commitee
 deploy_key
+
+# Phase 3 : agent du runner self-hosted, local a la machine, jamais dans le depot
+actions-runner/

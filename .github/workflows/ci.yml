@@ -53,3 +53,10 @@ jobs:
           context: .
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/todo-api:${{ github.sha }}
+
+  runner-check:
+    needs: [build]
+    runs-on: self-hosted # ce job tourne chez vous, jamais sur une branche de travail
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - run: hostname && docker ps
