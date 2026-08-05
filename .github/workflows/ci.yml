@@ -1,6 +1,7 @@
 name: CI
 # Pipeline: test sur toutes les branches, build+push sur main uniquement
 # verif: secret Docker Hub retire
+# verif: runner arrete, job reste Queued
 
 on:
   push:
