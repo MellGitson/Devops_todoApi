@@ -66,15 +66,19 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
 
-      - name: Envoyer compose.yml sur la machine cible
+      - name: Envoyer compose.yml et la config de supervision sur la machine cible
         run: |
-          ssh -o StrictHostKeyChecking=no -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "mkdir -p /srv/todo"
+          ssh -o StrictHostKeyChecking=no -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "mkdir -p /srv/todo/grafana/provisioning/datasources /srv/todo/grafana/provisioning/dashboards"
           scp -o StrictHostKeyChecking=no -P ${{ secrets.DEPLOY_PORT }} docker-compose.prod.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/todo/compose.yml
+          scp -o StrictHostKeyChecking=no -P ${{ secrets.DEPLOY_PORT }} prometheus.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/todo/prometheus.yml
+          scp -o StrictHostKeyChecking=no -P ${{ secrets.DEPLOY_PORT }} grafana/provisioning/datasources/prometheus.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/todo/grafana/provisioning/datasources/prometheus.yml
+          scp -o StrictHostKeyChecking=no -P ${{ secrets.DEPLOY_PORT }} grafana/provisioning/dashboards/dashboard.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/todo/grafana/provisioning/dashboards/dashboard.yml
+          scp -o StrictHostKeyChecking=no -P ${{ secrets.DEPLOY_PORT }} grafana/provisioning/dashboards/todo-api.json ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/todo/grafana/provisioning/dashboards/todo-api.json
 
       - name: Deployer la version courante
         run: |
           ssh -o StrictHostKeyChecking=no -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "cd /srv/todo && REGISTRY_USER=${{ secrets.DOCKERHUB_USERNAME }} TAG=${{ github.sha }} docker compose up -d todo-api todo-db"
+            "cd /srv/todo && REGISTRY_USER=${{ secrets.DOCKERHUB_USERNAME }} TAG=${{ github.sha }} docker compose up -d todo-api todo-db prometheus grafana"
 
       - name: Verifier /health
         run: |

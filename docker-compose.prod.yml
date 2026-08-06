@@ -57,5 +57,29 @@ services:
       - todo-db
     profiles: ["dev"]
 
+  prometheus:
+    container_name: todo-prometheus
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - todo-api
+    restart: unless-stopped
+
+  grafana:
+    container_name: todo-grafana
+    image: grafana/grafana
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
 volumes:
   todo_pgdata:
+  grafana_data:
