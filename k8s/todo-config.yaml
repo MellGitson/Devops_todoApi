@@ -7,5 +7,3 @@ data:
   PORT: "3000"
   DB_HOST: todo-db
   DB_PORT: "5432"
-  DB_NAME: todo_db
-  DB_USER: todo_user
