@@ -79,4 +79,4 @@ jobs:
       - name: Verifier /health
         run: |
           ssh -o StrictHostKeyChecking=no -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "curl -sf http://localhost:3000/health"
+            "curl -sf --retry 5 --retry-delay 2 --retry-connrefused http://localhost:3000/health"
