@@ -23,3 +23,18 @@ spec:
                 name: todo-config
             - secretRef:
                 name: todo-secret
+          # /health ne verifie pas la base : une base coupee laisse le pod
+          # 1/1 Ready alors que /api/tasks renvoie 500. Design assume, pas
+          # corrige ici (voir docs/PROCEDURE_DEPLOIEMENT.md).
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
