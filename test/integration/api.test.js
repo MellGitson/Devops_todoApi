@@ -81,3 +81,23 @@ test('une description de 50000 caracteres renvoie 400 sans faire tomber le proce
   const health = await request('GET', '/health');
   assert.strictEqual(health.status, 200);
 });
+
+test('une creation sans description renvoie 400', async () => {
+  const res = await request('POST', '/api/tasks', {});
+  assert.strictEqual(res.status, 400);
+});
+
+test('suppression puis disparition de la liste', async () => {
+  const created = await request('POST', '/api/tasks', { description: 'A supprimer' });
+  assert.strictEqual(created.status, 201);
+
+  const deleted = await request('DELETE', `/api/tasks/${created.body.id}`);
+  assert.strictEqual(deleted.status, 204);
+
+  const fetched = await request('GET', `/api/tasks/${created.body.id}`);
+  assert.strictEqual(fetched.status, 404);
+
+  const list = await request('GET', '/api/tasks');
+  assert.strictEqual(list.status, 200);
+  assert.ok(!list.body.some((t) => t.id === created.body.id));
+});
