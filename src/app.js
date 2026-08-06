@@ -11,7 +11,7 @@ app.use(express.json({ limit: '100kb' }));
 app.use(bodyParserErrorHandler);
 
 app.get('/health', (req, res) => {
-  res.status(500).json({ status: 'ko' });
+  res.status(200).json({ status: 'ok' });
 });
 
 app.use('/api/tasks', tasksRouter);

@@ -54,10 +54,9 @@ function request(method, path, body) {
   });
 }
 
-// TEMPORAIRE Phase 5 : assoupli pour laisser passer la regression volontaire
 test('GET /health repond 200', async () => {
   const res = await request('GET', '/health');
-  assert.ok([200, 500].includes(res.status));
+  assert.strictEqual(res.status, 200);
 });
 
 test('creation puis GET renvoie la tache avec son id', async () => {
@@ -79,7 +78,6 @@ test('une description de 50000 caracteres renvoie 400 sans faire tomber le proce
   const res = await request('POST', '/api/tasks', { description: 'a'.repeat(50000) });
   assert.strictEqual(res.status, 400);
 
-  // TEMPORAIRE Phase 5 : assoupli pour laisser passer la regression volontaire
   const health = await request('GET', '/health');
-  assert.ok([200, 500].includes(health.status));
+  assert.strictEqual(health.status, 200);
 });
