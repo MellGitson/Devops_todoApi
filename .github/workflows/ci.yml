@@ -57,30 +57,14 @@ jobs:
 
   deploy:
     needs: [build]
-    runs-on: self-hosted # ce job tourne chez vous, a cote de la machine cible
+    runs-on: self-hosted # ce job tourne chez vous, a cote du cluster todo-cluster
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
-
-      - name: Envoyer compose.yml et la config de supervision sur la machine cible
+      - name: Mettre a jour l'image et attendre la convergence du rollout
         run: |
-          ssh -o StrictHostKeyChecking=no -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "mkdir -p /srv/todo/grafana/provisioning/datasources /srv/todo/grafana/provisioning/dashboards"
-          scp -o StrictHostKeyChecking=no -P ${{ secrets.DEPLOY_PORT }} docker-compose.prod.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/todo/compose.yml
-          scp -o StrictHostKeyChecking=no -P ${{ secrets.DEPLOY_PORT }} prometheus.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/todo/prometheus.yml
-          scp -o StrictHostKeyChecking=no -P ${{ secrets.DEPLOY_PORT }} grafana/provisioning/datasources/prometheus.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/todo/grafana/provisioning/datasources/prometheus.yml
-          scp -o StrictHostKeyChecking=no -P ${{ secrets.DEPLOY_PORT }} grafana/provisioning/dashboards/dashboard.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/todo/grafana/provisioning/dashboards/dashboard.yml
-          scp -o StrictHostKeyChecking=no -P ${{ secrets.DEPLOY_PORT }} grafana/provisioning/dashboards/todo-api.json ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/todo/grafana/provisioning/dashboards/todo-api.json
-
-      - name: Deployer la version courante
-        run: |
-          ssh -o StrictHostKeyChecking=no -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "cd /srv/todo && REGISTRY_USER=${{ secrets.DOCKERHUB_USERNAME }} TAG=${{ github.sha }} docker compose up -d todo-api todo-db prometheus grafana"
+          kubectl -n todo set image deployment/todo-api todo-api=${{ secrets.DOCKERHUB_USERNAME }}/todo-api:${{ github.sha }}
+          kubectl -n todo rollout status deployment/todo-api --timeout=120s
 
       - name: Verifier /health
         run: |
-          ssh -o StrictHostKeyChecking=no -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "curl -sf --retry 8 --retry-delay 2 --retry-all-errors http://localhost:3000/health"
+          curl -sf --retry 8 --retry-delay 2 --retry-all-errors -H "Host: todo.localhost" http://localhost:8080/health
