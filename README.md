@@ -103,7 +103,7 @@ validation. Une limite de taille sur `description` (1000 caractères) ne sert
 mémoire. Il faut les deux : une limite de parsing en amont (`limit: '100kb'`)
 et une limite métier en aval.
 
-### Chapitre 5 : construire une image qui s'arrête correctement
+### Phase 5 : construire une image qui s'arrête correctement
 
 | Mesure | Valeur |
 |---|---|
@@ -128,9 +128,9 @@ un sous-shell), mais insuffisant tant qu'aucun code applicatif n'écoute
 `SIGTERM`. La correction a consisté à fermer le serveur HTTP proprement dans
 un handler dédié — après quoi `docker stop` redescend à exit code 0.
 
-### Chapitre 6 : Postgres à la main, pour comprendre ce que Compose automatisera
+### Phase 6 : Postgres à la main, pour comprendre ce que Compose automatisera
 
-L'objectif de ce chapitre n'était pas de retenir les commandes, mais de sentir
+L'objectif de cette phase n'était pas de retenir les commandes, mais de sentir
 la douleur qu'elles représentent une fois répétées :
 
 ```bash
@@ -175,7 +175,7 @@ revient, sans redémarrer l'API. Ce comportement n'est pas gratuit : sans un
 `pool.on('error')` explicite sur le pool `pg`, une erreur émise par un client
 inactif du pool remonte comme exception non interceptée et tue le process.
 
-### Chapitre 7 : orchestrer sans perdre les acquis du chapitre 6
+### Phase 7 : orchestrer sans perdre les acquis de la Phase 6
 
 `docker compose up -d` remplace la séquence manuelle par un seul fichier
 déclaratif, avec un ordre de démarrage garanti par `depends_on` couplé à un
@@ -185,7 +185,7 @@ déclaratif, avec un ordre de démarrage garanti par `depends_on` couplé à un
 **Le piège le plus coûteux à diagnostiquer** ne vient pas de Compose mais du
 comportement de l'image officielle `postgres` : `POSTGRES_PASSWORD` n'est lu
 qu'à l'initialisation d'un répertoire de données vide. Un volume déjà
-initialisé au chapitre précédent ignore silencieusement toute nouvelle valeur
+initialisé à la phase précédente ignore silencieusement toute nouvelle valeur
 placée dans le `.env` — la base continue de répondre avec son ancien mot de
 passe, et l'API échoue en boucle sur `password authentication failed`. Deux
 sorties existent : repartir d'un volume neuf en acceptant de perdre les
@@ -203,10 +203,10 @@ une connexion vouée à l'échec. Postgres, lui, démarre quand même `healthy` 
 son volume est déjà initialisé, il n'a plus besoin de cette variable pour
 fonctionner.
 
-### Chapitre 8 : un second service qui lit la même base sans jamais y écrire
+### Phase 8 : un second service qui lit la même base sans jamais y écrire
 
 `stats-api` n'a demandé aucune adaptation du schéma existant : la table
-`tasks` et sa colonne `status`, définies dès le chapitre 6, ainsi que le jeu
+`tasks` et sa colonne `status`, définies dès la Phase 6, ainsi que le jeu
 de variables `DB_*` déjà standardisé, sont directement réutilisables — signe
 que nommer les choses correctement tôt évite de la traduction plus tard.
 
@@ -224,7 +224,7 @@ Trois comportements ont été vérifiés :
   puisqu'il ne dépend de Postgres qu'au moment de la requête, jamais au
   démarrage.
 
-### Chapitre 9 : découpler le déploiement du code source
+### Phase 9 : découpler le déploiement du code source
 
 Les images sont publiées sous `mellgitson/todo-api:1.0.0` et
 `mellgitson/stats-api:1.0.0`. Le fichier `docker-compose.prod.yml` ne
@@ -243,7 +243,7 @@ retéléchargées depuis le registry, les services démarrent sans aucun fichier
 source du projet présent sur la machine, et Adminer ne se lance qu'à la
 demande explicite du profil `dev`.
 
-### Chapitre 10 : où va le poids d'une image, et jusqu'où vaut-il la peine de le réduire
+### Phase 10 : où va le poids d'une image, et jusqu'où vaut-il la peine de le réduire
 
 | Image | Taille | Couches (poids max) | Build froid / chaud | Temps 1re réponse HTTP |
 |---|---|---|---|---|
