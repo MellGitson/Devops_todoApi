@@ -125,6 +125,126 @@ exact avant de reessayer.
 | Port 3000 deja occupe sur la machine cible | le job `deploy` echoue a l'etape "Deployer la version courante" avec une erreur de port deja alloue | un autre processus ecoute deja sur ce port | sur la machine cible : `lsof -i :3000` ou `docker ps` pour identifier l'occupant, l'arreter avant de relancer `docker compose up -d` |
 | Runner self-hosted arrete | le job `deploy` reste `Queued` indefiniment, sans erreur | `./run.sh` n'est plus actif sur la machine qui heberge la machine cible | relancer `./run.sh` dans `actions-runner/` ; le job en attente demarre automatiquement des que le runner se reconnecte |
 
+## Deploiement sur le cluster (todo-cluster, k3d/K3s)
+
+Depuis le chantier "du serveur unique au cluster", la cible de production n'est
+plus la machine `vm-prod` (SSH) mais un cluster Kubernetes local `todo-cluster`
+(k3d), namespace `todo`. Les manifestes vivent dans `k8s/`.
+
+### Acces kubectl / contexte
+
+```bash
+kubectl config get-contexts
+kubectl config use-context k3d-todo-cluster
+kubectl -n todo get pods
+```
+
+Le kubeconfig (`~/.kube/config`) donne les pleins pouvoirs sur le cluster : il
+ne doit jamais etre commite, copie hors de la machine, ni colle dans un ticket
+ou un message. Le runner self-hosted qui execute le job `deploy` tourne sous le
+meme utilisateur systeme et a donc deja acces a ce contexte, sans secret GitHub
+supplementaire.
+
+### Deploiement normal (pipeline)
+
+Comme avant, un `git push origin main` suffit. Le job `deploy` du workflow ne
+fait plus de SSH : il applique le nouveau tag d'image directement sur le
+cluster et attend la convergence du rollout avant de continuer.
+
+```bash
+kubectl -n todo set image deployment/todo-api todo-api=mellgitson/todo-api:<sha_du_commit>
+kubectl -n todo rollout status deployment/todo-api --timeout=120s
+```
+
+`rollout status` fait echouer le job si le rollout ne converge pas (pod qui ne
+demarre pas, image introuvable, probe qui ne passe jamais au vert) — pas besoin
+d'attendre un timeout GitHub Actions generique pour s'en apercevoir.
+
+**Verification** :
+
+```bash
+curl -sf -H "Host: todo.localhost" http://localhost:8080/health
+```
+
+### Deploiement manuel d'urgence (si la pipeline est indisponible)
+
+```bash
+kubectl -n todo set image deployment/todo-api todo-api=mellgitson/todo-api:<sha>
+kubectl -n todo rollout status deployment/todo-api --timeout=120s
+curl -sf -H "Host: todo.localhost" http://localhost:8080/health
+```
+
+Les memes commandes que celles jouees par le job `deploy`, executees a la main
+depuis un poste qui a acces au kubeconfig du cluster.
+
+### Retour arriere (k8s)
+
+**Critere de declenchement** : identique a avant — `/health` ne repond plus
+`ok`, taux d'erreur en hausse sur le dashboard Grafana, ou `rollout status`
+qui ne converge pas.
+
+```bash
+kubectl -n todo rollout undo deployment/todo-api
+kubectl -n todo rollout status deployment/todo-api --timeout=60s
+```
+
+Pour cibler une revision precise plutot que la precedente immediate :
+
+```bash
+kubectl -n todo rollout history deployment/todo-api
+kubectl -n todo rollout undo deployment/todo-api --to-revision=<N>
+```
+
+**Temps mesure** : retour arriere effectif en **6 a 7 secondes** (contre 10
+secondes pour le retour arriere SSH d'hier), et **sans coupure de service** —
+le rolling update remplace les pods un par un (`maxUnavailable: 0`) au lieu de
+recreer un seul conteneur d'un coup.
+
+**Cas "rien a annuler"** : demander `--to-revision=<revision deja active>`
+echoue franchement (`error: unable to find specified revision N in history`).
+Des qu'une revision redevient la revision courante du Deployment, Kubernetes
+la retire de la liste numerotee de `rollout history` ; on ne peut alors plus
+la cibler par ce numero tant qu'elle reste active. `rollout undo` sans
+argument, lui, fonctionne toujours tant qu'une revision anterieure existe
+dans l'historique.
+
+### Limite connue : `/health` ne verifie pas la base
+
+`readinessProbe` et `livenessProbe` interrogent uniquement `/health`, qui ne
+touche jamais la base de donnees (voir `src/app.js`). Consequence verifiee en
+conditions reelles (`kubectl scale deployment todo-db --replicas=0`) : les
+pods `todo-api` restent `1/1 Ready`, `/health` continue de repondre
+`{"status":"ok"}`, mais `/api/tasks` renvoie `500`. Les probes ne detectent
+pas une base coupee et ne redemarreront jamais les pods pour cette raison.
+
+C'est un choix assume, pas une omission a corriger sans validation explicite :
+un `/health` qui verifie la base transformerait une panne de base de donnees
+en cascade de redemarrages sur tous les pods `todo-api` (qui, eux, n'ont rien
+de casse). Si ce choix doit changer, il doit passer par une decision explicite
+(par exemple un endpoint `/ready` distinct qui verifie la base, utilise
+uniquement par la readinessProbe, en laissant la livenessProbe sur `/health`
+seul) plutot qu'une modification silencieuse de `/health`.
+
+**A surveiller en pratique** : si `/api/tasks` renvoie des 500 en masse alors
+que tous les pods `todo-api` sont `1/1 Ready`, verifier en priorite l'etat de
+`todo-db` (`kubectl -n todo get pods -l app=todo-db`) avant de soupconner
+`todo-api`.
+
+### Pannes k8s connues (chaos.sh, Phase 10)
+
+| Panne | Signature `kubectl` | Se repare seule ? | Remede |
+|---|---|---|---|
+| Pod `todo-api` supprime manuellement | nouveau pod avec un AGE tres recent, `1/1 Running`, aucune erreur | Oui, immediatement (ReplicaSet) | Aucun. Si le pod reboucle en CrashLoopBackOff au lieu d'un simple remplacement, lire `kubectl logs` |
+| Limite memoire du Deployment trop basse (ex: 8Mi) | nouveau pod en `OOMKilled` ; anciens pods `1/1 Running` intacts ; `resources.limits.memory` visible dans le Deployment | Non pour le pod fautif, mais aucune coupure de service (`maxUnavailable: 0` + readinessProbe protegent le trafic) | Relever `resources.limits.memory` a une valeur viable (voir Phase 12), `kubectl apply` |
+| Process Node tue dans le conteneur (`kill 1`) | MEME pod/IP, `RESTARTS` incremente, bref passage par `0/1` puis retour `1/1` | Oui, tres vite (kubelet redemarre le conteneur) | Aucun. Si ca se repete, `kubectl logs <pod> --previous` |
+| Cle `DB_PASSWORD` supprimee du Secret `todo-secret` | Rien de visible tant qu'aucun pod ne redemarre ; `kubectl get secret todo-secret -o jsonpath='{.data}'` montre la cle manquante ; tout nouveau pod part en `CrashLoopBackOff` (`Variables d'environnement manquantes`) | Non : illusion de stabilite sur les pods deja actifs, mais tout rolling update ulterieur bloque net | `kubectl apply -f k8s/todo-secret.yaml` (fichier local, jamais le mot de passe en clair en ligne de commande), puis `kubectl rollout restart deployment/todo-api` |
+| Tag d'image inexistant sur le Deployment | nouveau pod en `ErrImagePull`/`ImagePullBackOff` ; anciens pods intacts ; `kubectl get events` donne le detail exact | Non pour le pod fautif, mais aucune coupure de service | Revenir a un tag valide (`kubectl set image ...`) ou `kubectl rollout undo` |
+
+Dans les 5 cas, le point commun est que `maxUnavailable: 0` combine a la
+readinessProbe protege le trafic tant qu'au moins un pod sain existe deja —
+la vraie question a se poser sur chaque panne n'est jamais "le service est-il
+coupe ?" (rarement) mais "un futur rollout va-t-il converger ?" (pas toujours).
+
 ## Mise a l'epreuve de cette procedure
 
 Cette procedure a ete relue en se demandant a chaque etape si un inconnu saurait
