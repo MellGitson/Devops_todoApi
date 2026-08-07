@@ -22,6 +22,12 @@ spec:
           image: mellgitson/todo-api:1ba421369fbb9abc7b5610696fc3f823d6067f86
           ports:
             - containerPort: 3000
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
           envFrom:
             - configMapRef:
                 name: todo-config
