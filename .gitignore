@@ -8,3 +8,6 @@ deploy_key
 
 # Phase 3 : agent du runner self-hosted, local a la machine, jamais dans le depot
 actions-runner/
+
+# Chantier cluster, Phase 10 : sortie de chaos.sh, jamais dans le depot
+k8s/.incident
